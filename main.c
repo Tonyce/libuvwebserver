@@ -6,11 +6,14 @@
 #include <llhttp.h>
 #include <uv.h>
 
+#include "client.h"
+#include "parser.h"
+
 #define PORT 1234
 #define DEFAULT_BACKLOG 511
 
 uv_loop_t* loop;
-llhttp_settings_t settings;
+extern llhttp_settings_t settings;
 
 const char* response =
     "HTTP/1.1 200 OK\r\n"
@@ -19,15 +22,6 @@ const char* response =
     "Content-Type: text/html; charset=UTF-8\r\n"
     "\r\n"
     "helloworld";
-
-typedef struct {
-    uv_tcp_t handle;       // libuv tcp
-    uv_write_t write_req;  // write req to libuv
-    llhttp_t parser;       // http parser
-    uv_buf_t buf;          // data res
-    char* url;
-    char* body;
-} client_t;
 
 // 建立新的 tcp 连接后的回调
 void new_connection(uv_stream_t* server, int status);
@@ -39,16 +33,12 @@ void read_cb(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf);
 void write_cb(uv_write_t* req, int status);
 
 int handle_on_message_complete(llhttp_t* parser);
-int on_body(llhttp_t* parser, const char* at, size_t body_len);
-int on_url(llhttp_t* parser, const char* at, size_t url_len);
 
 int main(int args, char* argv[]) {
     // 初始化 http parser settings
-    llhttp_settings_init(&settings);
+    init_parser_settings();
     /* Set user callback */
     settings.on_message_complete = handle_on_message_complete;
-    settings.on_body = on_body;
-    settings.on_url = on_url;
 
     loop = uv_default_loop();
     struct sockaddr_in addr;              // tcp server addr will be bind
@@ -140,35 +130,14 @@ int handle_on_message_complete(llhttp_t* parser) {
     // 这里就可以根据 url body 去做不同的事情
     // do other
     // 根据其它调用的结果响应不同的数据
-    client->buf = uv_buf_init((char*)response, strlen(response));
+    // client->buf = uv_buf_init((char*)response, strlen(response));
+    client->res.base = (char*)response;
+    client->res.len = strlen(response);
     uv_write(
         (uv_write_t*)&client->write_req,
         (uv_stream_t*)&client->handle,
-        &client->buf,
+        &client->res,
         1,
         write_cb);
-    return 0;
-};
-
-// 这里的 url　是指在 url处的指针，所以要根据 len 去读取
-int on_url(llhttp_t* parser, const char* at, size_t url_len) {
-    char* url = NULL;
-    url = (char*)malloc(url_len + 1);
-    strncpy(url, at, url_len);
-    // fprintf(stderr, "url: %s\nurl_len: %zu\n", url, url_len);
-
-    client_t* client = (client_t*)parser->data;
-    client->url = url;
-    return 0;
-};
-
-// 这里的 body 是指在 body 处的指针，要根据 len 去读取
-int on_body(llhttp_t* parser, const char* at, size_t body_len) {
-    char* body = (char*)malloc(body_len + 1);
-    strncpy(body, at, body_len);
-
-    client_t* client = (client_t*)parser->data;
-    client->body = body;
-
     return 0;
 };
