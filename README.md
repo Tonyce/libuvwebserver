@@ -11,3 +11,5 @@ simple webserver base on libuv
 由此可见 Get 是可以传 body 的，至于处不处理，看服务端。也许很多框架碰到 Get 直接把body 忽略了。但在协议层是可以的。
 
 done！
+
+`cc -g -Ilibuv/include -Illhttp/build libuv/.libs/libuv.a llhttp/build/libllhttp.a main.c parser.c  -o uvwebserver`
